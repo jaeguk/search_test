@@ -45,7 +45,7 @@ def forward_indexing():
                             if not line: break
                             parse_nouns(did, line, dic_terms, tf_file)
 
-                        #print(dic_terms)
+                        #print(dic_terms) #print1
 
                         out = {did+1 : dic_terms}
                         json_string = json.dumps(out)
@@ -119,12 +119,14 @@ def make_invertedFile():
             dic_item = dics_tf[x]
             tf_list = [x for x in dic_item["tf_list"]]
 
+            #print(x, tf_list) #print2
+
             for tf_item in tf_list:
 
-                #weight = tf_item['tf'] / math.log( (N+1) / dic_item['df'], 2)
-                weight = tf_item['tf'] / math.log( (N) / dic_item['df'], 2)
+                weight = tf_item['tf'] * math.log( (N+1) / dic_item['df'], 2)
 
                 tf_item['weight'] = weight
+
 
             #print(x, tf_list)
 
@@ -137,7 +139,8 @@ def make_invertedFile():
             dic_item['tf_list'] = sorted_tf_list
 
             item = {"start_pos": start_pos, "doc_count": doc_count}
-            print(x, item, dic_item)
+
+            print(x, item, dic_item)  #print3
 
             # write TF file
             tf_temp = dict()
@@ -170,7 +173,7 @@ def make_invertedFile():
         f_tf.close()
         f_posting_file.close()
 
-def search_doc(word, result):
+def search_doc(word, result, N):
     with open('out/term_table.txt', 'r') as f:
         str = f.readline()
         if str:
@@ -179,6 +182,7 @@ def search_doc(word, result):
             if word in term_tables:
                 item = term_tables[word]
                 #print(item)
+                w_iq = math.log( (N+1) / item['doc_count'], 2)
 
                 with open('out/posting_file.txt', 'rb') as f_posting:
                     f_posting.seek(item['start_pos'])
@@ -193,12 +197,14 @@ def search_doc(word, result):
 
                         remain -= 12
 
-                        sim = 1
+                        # weight => tf * idf
+                        sim = w_iq * weight
                         if did in result:
                             old = result[did]
-                            sim = old['sim'] + 1
+                            sim = old['sim'] + sim
+                            #print("did=", did, " term=", word, w_iq, weight, item['doc_count'], N, old['sim'])
 
-                        result[did] = {'weight': weight, 'sim': sim}
+                        result[did] = {'sim': sim}
 
 
 if __name__ == "__main__":
@@ -225,20 +231,15 @@ if __name__ == "__main__":
             make_invertedFile()
 
         for noun in nouns:
-            search_doc(noun, result)
+            search_doc(noun, result, len(doc_names))
 
         #print(result)
         lis = [
             {
-                'did':key, 'doc_name': doc_names[key - 1], 'weight':result[key]['weight'], 'sim':result[key]['sim']
+                'did':key, 'doc_name': doc_names[key - 1], 'sim':result[key]['sim']
              } for key in result.keys()]
 
-        for l in lis:
-            # and operation
-            if l['sim'] < len(nouns):
-                l['sim'] = 0
-
-        results = sorted(lis, key=lambda i: (i['sim'], i['weight']), reverse=True)
+        results = sorted(lis, key=lambda i: (i['sim']), reverse=True)
 
         for r in results:
             print(r)
